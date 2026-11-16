@@ -22,6 +22,7 @@ string(REGEX REPLACE "^([0-9]+\.[0-9]+\.[0-9]+).*$" "\\1" PROJECT_VERSION
 
 # Declare the project
 project(microlog VERSION ${PROJECT_VERSION})
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ----------------------------------------------------------------------------
 # Version substitution

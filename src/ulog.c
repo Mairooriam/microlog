@@ -528,33 +528,92 @@ ulog_status ulog_color_config(bool enabled) {
    Optional Feature: Color
    (`color_*`, depends on: Print, Color Config)
 ============================================================================ */
-#if ULOG_HAS_COLOR
 
 //  Private
 // ================
 
 // From https://en.wikipedia.org/wiki/ANSI_escape_code#8-bit
 // ANSI color codes from least to most attention-grabbing
-static const char *color_levels[] = {
-    "\x1b[m",            // LEVEL_0: Color reset (default)
-    "\x1b[36m",          // LEVEL_1: Color (Cyan)
-    "\x1b[32m",          // LEVEL_2: Color (Green)
-    "\x1b[33m",          // LEVEL_3: Color (Yellow)
-    "\x1b[31m",          // LEVEL_4: Color (Red)
-    "\x1b[31m\x1b[47m",  // LEVEL_5: Color (Red on White)
-    "\x1b[43m\x1b[31m",  // LEVEL_6: Color (Yellow on Red)
-    "\x1b[41m\x1b[97m",  // LEVEL_7: Color (White on Red)
+typedef struct {
+    const char *timestamp;
+    const char *prefix;
+    const char *level;
+    const char *topic;
+    const char *message;
+} LogColor;
+
+static const LogColor log_colors_none = {
+    .timestamp = "",
+    .prefix    = "",
+    .level     = "",
+    .topic     = "",
+    .message   = "",
 };
 
-#define COLOR_TERMINATOR "\x1b[0m"
+#if ULOG_HAS_COLOR
+#define C_ANSI(code) "\x1b[" #code "m"
+#define C_RESET C_ANSI(0)
 
-static void color_print_start(print_target *tgt, ulog_event *ev) {
-    print_to_target(tgt, "%s", color_levels[ev->level]);
-}
+#define C_BLUE "\x1b[38;5;21m"
+#define C_DARK_BLUE "\x1b[38;5;27m"
+#define C_LIGHT_BLUE "\x1b[38;5;75m"
 
-static void color_print_end(print_target *tgt) {
-    print_to_target(tgt, "%s", COLOR_TERMINATOR);
-}
+#define C_GREEN "\x1b[38;5;34m"
+#define C_DARK_GREEN "\x1b[38;5;28m"
+#define C_LIGHT_GREEN "\x1b[38;5;46m"
+
+#define C_YELLOW "\x1b[38;5;220m"
+#define C_DARK_YELLOW "\x1b[38;5;178m"
+#define C_LIGHT_YELLOW "\x1b[38;5;228m"
+
+#define C_RED "\x1b[38;5;196m"
+#define C_DARK_RED "\x1b[38;5;160m"
+#define C_LIGHT_RED "\x1b[38;5;203m"
+
+#define C_PURPLE "\x1b[38;5;129m"
+#define C_DARK_PURPLE "\x1b[38;5;93m"
+#define C_LIGHT_PURPLE "\x1b[38;5;141m"
+
+#define C_CYAN "\x1b[38;5;39m"
+#define C_DARK_CYAN "\x1b[38;5;30m"
+#define C_LIGHT_CYAN "\x1b[38;5;51m"
+
+#define C_ORANGE "\x1b[38;5;208m"
+#define C_DARK_ORANGE "\x1b[38;5;166m"
+#define C_LIGHT_ORANGE "\x1b[38;5;220m"
+
+#define C_GRAY "\x1b[38;5;244m"
+#define C_LIGHT_GRAY "\x1b[38;5;250m"
+
+// clang-format off
+static const LogColor log_colors[] = {
+    //              Timepstamp Prefix    Level      Topic           Message
+    [0] = {         C_RESET,   C_GRAY,   C_RESET,   C_RESET,        C_RESET       },
+    [1] = {         C_GRAY,    C_GRAY,   C_BLUE,    C_LIGHT_BLUE,   C_LIGHT_GRAY  },
+    [2] = {         C_GRAY,    C_GRAY,   C_GREEN,   C_LIGHT_GREEN,  C_LIGHT_GRAY  },
+    [3] = {         C_GRAY,    C_GRAY,   C_YELLOW,  C_LIGHT_YELLOW, C_LIGHT_GRAY  },
+    [4] = {         C_GRAY,    C_GRAY,   C_RED,     C_LIGHT_RED,    C_LIGHT_GRAY  },
+    [5] = {         C_GRAY,    C_GRAY,   C_PURPLE,  C_LIGHT_PURPLE, C_LIGHT_GRAY  },
+    [6] = {         C_GRAY,    C_GRAY,   C_CYAN,    C_LIGHT_CYAN,   C_LIGHT_GRAY  },
+    [7] = {         C_GRAY,    C_GRAY,   C_ORANGE,  C_LIGHT_ORANGE, C_LIGHT_GRAY  },
+};
+// clang-format on
+#define COLOR_PRINT(tgt, enabled, value)                                       \
+    do {                                                                       \
+        if (enabled)                                                           \
+            print_to_target((tgt), "%s", (value));                             \
+    } while (0)
+
+#define COLOR_RESET(tgt, enabled) COLOR_PRINT((tgt), (enabled), C_RESET)
+// #define COLOR_TERMINATOR "\x1b[0m"
+
+// static void color_print_start(print_target *tgt, ulog_event *ev) {
+//     print_to_target(tgt, "%s", color_levels[ev->level]);
+// }
+//
+// static void color_print_end(print_target *tgt) {
+//     print_to_target(tgt, "%s", COLOR_TERMINATOR);
+// }
 
 #else  // ULOG_HAS_COLOR
 
@@ -563,7 +622,15 @@ static void color_print_end(print_target *tgt) {
 
 #define color_print_start(tgt, ev) (void)(tgt), (void)(ev)
 #define color_print_end(tgt) (void)(tgt)
+#define COLOR_PRINT(tgt, enabled, value)                                       \
+    do {                                                                       \
+        (void)(enabled);                                                       \
+    } while (0)
 
+#define COLOR_RESET(tgt, enabled)                                              \
+    do {                                                                       \
+        (void)(enabled);                                                       \
+    } while (0)
 #endif  // ULOG_HAS_COLOR
 
 /* ============================================================================
@@ -1807,7 +1874,15 @@ static void log_print_message(print_target *tgt, ulog_event *ev) {
 static void log_print_event(print_target *tgt, ulog_event *ev, bool full_time,
                             bool color, bool new_line) {
 
-    color ? color_print_start(tgt, ev) : (void)0;
+    const LogColor *c = &log_colors_none;
+
+#if ULOG_HAS_COLOR
+    if (color) {
+        c = &log_colors[ev->level];
+    }
+#else
+    (void)color;
+#endif
 
     bool append_space = true;
     (void)append_space;  // May be unused if no prefix and time
@@ -1817,15 +1892,27 @@ static void log_print_event(print_target *tgt, ulog_event *ev, bool full_time,
     }
 #endif
 
+    COLOR_PRINT(tgt, color, c->timestamp);
     full_time ? time_print_full(tgt, ev, append_space)
               : time_print_short(tgt, ev, append_space);
+    COLOR_RESET(tgt, color);
 
+    COLOR_PRINT(tgt, color, c->prefix);
     prefix_print(tgt);
-    level_print(tgt, ev);
-    topic_print(tgt, ev);
-    log_print_message(tgt, ev);
+    COLOR_RESET(tgt, color);
 
-    color ? color_print_end(tgt) : (void)0;
+    COLOR_PRINT(tgt, color, c->level);
+    level_print(tgt, ev);
+    COLOR_RESET(tgt, color);
+
+    COLOR_PRINT(tgt, color, c->topic);
+    topic_print(tgt, ev);
+    COLOR_RESET(tgt, color);
+
+    COLOR_PRINT(tgt, color, c->message);
+    log_print_message(tgt, ev);
+    COLOR_RESET(tgt, color);
+
     new_line ? print_to_target(tgt, "\n") : (void)0;
 }
 
